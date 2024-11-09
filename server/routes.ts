@@ -1,8 +1,8 @@
 import { Express, static as expressStatic } from "express";
 import { setupAuth } from "./auth";
 import { db } from "db";
-import { requests } from "db/schema";
-import { eq } from "drizzle-orm";
+import { requests, requestAnalytics } from "db/schema";
+import { eq, sql } from "drizzle-orm";
 import multer from "multer";
 import { extname, join } from "path";
 import { ALLOWED_FILE_TYPES, MAX_FILE_SIZE } from "../client/src/lib/constants";
@@ -64,7 +64,6 @@ export function registerRoutes(app: Express) {
 
       res.json(newRequest);
     } catch (error) {
-      // Remove uploaded file if database insertion fails
       if (req.file) {
         const fs = require('fs');
         fs.unlink(req.file.path, (err: any) => {
@@ -108,6 +107,64 @@ export function registerRoutes(app: Express) {
       res.json(updatedRequest);
     } catch (error) {
       res.status(500).json({ message: "Failed to update request status" });
+    }
+  });
+
+  // Get analytics data (admin only)
+  app.get("/api/analytics", async (req, res) => {
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      // Get request counts by status
+      const statusCounts = await db
+        .select({
+          status: requests.status,
+          count: sql<number>`count(*)::int`
+        })
+        .from(requests)
+        .groupBy(requests.status);
+
+      // Get average processing time (completed requests only)
+      const avgProcessingTime = await db
+        .select({
+          avgTime: sql<number>`
+            avg(extract(epoch from (updated_at - created_at)) / 3600)::int`
+        })
+        .from(requests)
+        .where(eq(requests.status, 'completed'));
+
+      // Get requests over time (last 7 days)
+      const requestsOverTime = await db
+        .select({
+          date: sql<string>`date_trunc('day', created_at)::date`,
+          count: sql<number>`count(*)::int`
+        })
+        .from(requests)
+        .where(sql`created_at >= now() - interval '7 days'`)
+        .groupBy(sql`date_trunc('day', created_at)`)
+        .orderBy(sql`date_trunc('day', created_at)`);
+
+      // Get institution statistics
+      const institutionStats = await db
+        .select({
+          institutionId: requests.institutionId,
+          totalRequests: sql<number>`count(*)::int`,
+          completedRequests: sql<number>`
+            sum(case when status = 'completed' then 1 else 0 end)::int`
+        })
+        .from(requests)
+        .groupBy(requests.institutionId);
+
+      res.json({
+        statusCounts,
+        avgProcessingTime: avgProcessingTime[0]?.avgTime || 0,
+        requestsOverTime,
+        institutionStats
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch analytics data" });
     }
   });
 }

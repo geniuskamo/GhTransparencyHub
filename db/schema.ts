@@ -31,6 +31,18 @@ export const requests = pgTable("requests", {
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
 
+export const requestAnalytics = pgTable("request_analytics", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  date: timestamp("date").defaultNow().notNull(),
+  totalRequests: integer("total_requests").notNull(),
+  pendingRequests: integer("pending_requests").notNull(),
+  processingRequests: integer("processing_requests").notNull(),
+  completedRequests: integer("completed_requests").notNull(),
+  rejectedRequests: integer("rejected_requests").notNull(),
+  averageProcessingTime: integer("average_processing_time").notNull(), // in hours
+  institutionId: integer("institution_id").references(() => institutions.id)
+});
+
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -45,3 +57,8 @@ export const insertInstitutionSchema = createInsertSchema(institutions);
 export const selectInstitutionSchema = createSelectSchema(institutions);
 export type InsertInstitution = z.infer<typeof insertInstitutionSchema>;
 export type Institution = z.infer<typeof selectInstitutionSchema>;
+
+export const insertRequestAnalyticsSchema = createInsertSchema(requestAnalytics);
+export const selectRequestAnalyticsSchema = createSelectSchema(requestAnalytics);
+export type InsertRequestAnalytics = z.infer<typeof insertRequestAnalyticsSchema>;
+export type RequestAnalytics = z.infer<typeof selectRequestAnalyticsSchema>;
