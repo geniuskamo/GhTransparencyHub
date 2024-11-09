@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { useUser } from "@/hooks/use-user";
 import { 
   NavigationMenu,
@@ -10,36 +10,53 @@ import { GHANA_COLORS } from "@/lib/constants";
 
 export function NavBar() {
   const { user, logout } = useUser();
+  const [, setLocation] = useLocation();
+
+  const navigateTo = (path: string) => {
+    setLocation(path);
+  };
 
   return (
     <nav className="border-b" style={{ borderColor: GHANA_COLORS.green }}>
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-        <Link href="/">
-          <a className="text-2xl font-bold" style={{ color: GHANA_COLORS.red }}>
-            Ghana RTI
-          </a>
-        </Link>
+        <Button 
+          variant="ghost" 
+          className="text-2xl font-bold hover:opacity-80 transition-opacity p-0"
+          style={{ color: GHANA_COLORS.red }}
+          onClick={() => navigateTo("/")}
+        >
+          Ghana RTI
+        </Button>
 
         <NavigationMenu>
-          <NavigationMenuList className="space-x-4">
+          <NavigationMenuList className="flex items-center gap-6">
             <NavigationMenuItem>
-              <Link href="/requests">
-                <a className="hover:text-primary">Requests</a>
-              </Link>
+              <Button
+                variant="ghost"
+                className="text-lg font-medium text-foreground hover:text-primary transition-colors"
+                onClick={() => navigateTo("/requests")}
+              >
+                Requests
+              </Button>
             </NavigationMenuItem>
             
             {user ? (
               <>
                 {user.role === "admin" && (
                   <NavigationMenuItem>
-                    <Link href="/admin">
-                      <a className="hover:text-primary">Admin</a>
-                    </Link>
+                    <Button
+                      variant="ghost"
+                      className="text-lg font-medium text-foreground hover:text-primary transition-colors"
+                      onClick={() => navigateTo("/admin")}
+                    >
+                      Admin
+                    </Button>
                   </NavigationMenuItem>
                 )}
                 <NavigationMenuItem>
                   <Button 
-                    variant="ghost" 
+                    variant="outline"
+                    className="font-medium hover:bg-destructive hover:text-destructive-foreground transition-colors"
                     onClick={() => logout()}
                   >
                     Logout
@@ -48,9 +65,13 @@ export function NavBar() {
               </>
             ) : (
               <NavigationMenuItem>
-                <Link href="/auth">
-                  <Button variant="default">Login</Button>
-                </Link>
+                <Button 
+                  variant="default"
+                  className="font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => navigateTo("/auth")}
+                >
+                  Login
+                </Button>
               </NavigationMenuItem>
             )}
           </NavigationMenuList>
