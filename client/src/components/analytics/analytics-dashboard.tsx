@@ -25,30 +25,38 @@ type RequestStatusKey = keyof RequestStatusType;
 
 function AnalyticsContent() {
   const { analytics, isLoading, error } = useAnalytics();
+  
+  // Initialize empty data
+  const emptyStatusData: { name: string; value: number }[] = [];
+  const emptyTimeData: { date: string; requests: number }[] = [];
 
-  if (error) return <div>Failed to load analytics</div>;
-  if (isLoading) return <div>Loading...</div>;
-
+  // Move hooks outside conditions
   const statusData = useMemo(() => 
-    analytics?.statusCounts.map(({ status, count }) => ({
+    analytics?.statusCounts?.map(({ status, count }) => ({
       name: REQUEST_STATUS[status as RequestStatusKey],
       value: count
-    })) ?? [], [analytics?.statusCounts]
+    })) ?? emptyStatusData,
+    [analytics?.statusCounts]
   );
 
   const timeData = useMemo(() => 
-    analytics?.requestsOverTime.map(({ date, count }) => ({
+    analytics?.requestsOverTime?.map(({ date, count }) => ({
       date: new Date(date).toLocaleDateString(),
       requests: count
-    })) ?? [], [analytics?.requestsOverTime]
+    })) ?? emptyTimeData,
+    [analytics?.requestsOverTime]
   );
 
-  const COLORS = [
+  const COLORS = useMemo(() => [
     GHANA_COLORS.red,
     GHANA_COLORS.gold,
     GHANA_COLORS.green,
     "#999999"
-  ];
+  ], []);
+
+  // Return loading/error states after hooks
+  if (error) return <div>Failed to load analytics</div>;
+  if (isLoading) return <div>Loading...</div>;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -70,7 +78,7 @@ function AnalyticsContent() {
                     outerRadius={80}
                     label
                   >
-                    {statusData?.map((_, index) => (
+                    {statusData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -134,7 +142,7 @@ function AnalyticsContent() {
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={analytics?.institutionStats}
+                  data={analytics?.institutionStats ?? []}
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
