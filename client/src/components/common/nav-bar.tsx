@@ -7,14 +7,16 @@ import {
   NavigationMenuList
 } from "@/components/ui/navigation-menu";
 import { GHANA_COLORS } from "@/lib/constants";
+import { useMemo } from "react";
 
 export function NavBar() {
   const { user, logout } = useUser();
   const [, setLocation] = useLocation();
 
-  const navigateTo = (path: string) => {
+  // Memoize navigation function to prevent unnecessary re-renders
+  const navigateTo = useMemo(() => (path: string) => {
     setLocation(path);
-  };
+  }, [setLocation]);
 
   return (
     <nav className="border-b" style={{ borderColor: GHANA_COLORS.green }}>
