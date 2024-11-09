@@ -35,28 +35,52 @@ declare global {
   }
 }
 
+function validateSession(req: Express.Request, res: Express.Response, next: Express.NextFunction) {
+  if (req.isAuthenticated()) {
+    // Check if session is about to expire and extend if needed
+    if (req.session.cookie.maxAge && req.session.cookie.maxAge < 600000) { // 10 minutes
+      req.session.cookie.maxAge = 24 * 60 * 60 * 1000; // Extend to 24 hours
+    }
+    next();
+  } else {
+    res.status(401).json({ message: "Unauthorized" });
+  }
+}
+
 export function setupAuth(app: Express) {
   const MemoryStore = createMemoryStore(session);
   const sessionSettings: session.SessionOptions = {
     secret: process.env.REPL_ID || "ghana-rti-platform",
     resave: false,
     saveUninitialized: false,
-    cookie: {},
+    rolling: true, // Refresh session with each request
+    cookie: {
+      secure: app.get("env") === "production",
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: "lax"
+    },
     store: new MemoryStore({
       checkPeriod: 86400000, // prune expired entries every 24h
+      ttl: 24 * 60 * 60 * 1000 // Time to live - 24 hours
     }),
   };
 
   if (app.get("env") === "production") {
     app.set("trust proxy", 1);
-    sessionSettings.cookie = {
-      secure: true,
-    };
   }
 
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
+
+  // Properly handle session errors
+  app.use((err: any, req: Express.Request, res: Express.Response, next: Express.NextFunction) => {
+    if (err.name === 'SessionError') {
+      return res.status(401).json({ message: "Session expired" });
+    }
+    next(err);
+  });
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
@@ -68,11 +92,11 @@ export function setupAuth(app: Express) {
           .limit(1);
 
         if (!user) {
-          return done(null, false, { message: "Incorrect username." });
+          return done(null, false, { message: "Invalid username or password" });
         }
         const isMatch = await crypto.compare(password, user.password);
         if (!isMatch) {
-          return done(null, false, { message: "Incorrect password." });
+          return done(null, false, { message: "Invalid username or password" });
         }
         return done(null, user);
       } catch (err) {
@@ -82,17 +106,26 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => {
-    done(null, user.id);
+    // Only serialize essential user data
+    const { id, username, role } = user;
+    done(null, { id, username, role });
   });
 
-  passport.deserializeUser(async (id: number, done) => {
+  passport.deserializeUser(async (serializedUser: any, done) => {
     try {
       const [user] = await db
         .select()
         .from(users)
-        .where(eq(users.id, id))
+        .where(eq(users.id, serializedUser.id))
         .limit(1);
-      done(null, user);
+      
+      if (!user) {
+        return done(new Error("User not found"));
+      }
+      
+      // Only expose non-sensitive data
+      const { password: _, ...safeUser } = user;
+      done(null, safeUser);
     } catch (err) {
       done(err);
     }
@@ -137,9 +170,10 @@ export function setupAuth(app: Express) {
         if (err) {
           return next(err);
         }
+        const { password: _, ...safeUser } = newUser;
         return res.json({
           message: "Registration successful",
-          user: { id: newUser.id, username: newUser.username },
+          user: safeUser
         });
       });
     } catch (error) {
@@ -155,26 +189,26 @@ export function setupAuth(app: Express) {
         .json({ message: "Invalid input", errors: result.error.flatten() });
     }
 
-    const cb = (err: any, user: Express.User, info: IVerifyOptions) => {
+    passport.authenticate("local", (err: any, user: Express.User | false, info: IVerifyOptions) => {
       if (err) {
         return next(err);
       }
       if (!user) {
-        return res.status(400).json({
-          message: info.message ?? "Login failed",
+        return res.status(401).json({
+          message: info.message ?? "Authentication failed",
         });
       }
-      req.logIn(user, (err) => {
+      req.login(user, (err) => {
         if (err) {
           return next(err);
         }
+        const { password: _, ...safeUser } = user;
         return res.json({
           message: "Login successful",
-          user: { id: user.id, username: user.username },
+          user: safeUser
         });
       });
-    };
-    passport.authenticate("local", cb)(req, res, next);
+    })(req, res, next);
   });
 
   app.post("/logout", (req, res) => {
@@ -182,14 +216,17 @@ export function setupAuth(app: Express) {
       if (err) {
         return res.status(500).json({ message: "Logout failed" });
       }
-      res.json({ message: "Logout successful" });
+      req.session.destroy((err) => {
+        if (err) {
+          return res.status(500).json({ message: "Failed to destroy session" });
+        }
+        res.json({ message: "Logout successful" });
+      });
     });
   });
 
-  app.get("/api/user", (req, res) => {
-    if (req.isAuthenticated()) {
-      return res.json(req.user);
-    }
-    res.status(401).json({ message: "Unauthorized" });
+  app.get("/api/user", validateSession, (req, res) => {
+    const { password: _, ...safeUser } = req.user;
+    res.json(safeUser);
   });
 }

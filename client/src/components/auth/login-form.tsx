@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Form, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { useState } from "react";
 
 export function LoginForm() {
   const { login } = useUser();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [isLoading, setIsLoading] = useState(false);
   
   const form = useForm({
     resolver: zodResolver(insertUserSchema),
@@ -22,19 +24,39 @@ export function LoginForm() {
   });
 
   const onSubmit = async (data: { username: string; password: string }) => {
-    const result = await login(data);
-    if (result.ok) {
-      toast({
-        title: "Success",
-        description: "Logged in successfully"
-      });
-      setLocation("/");
-    } else {
+    try {
+      setIsLoading(true);
+      const result = await login(data);
+      
+      if (result.ok) {
+        if (result.user) {
+          toast({
+            title: "Success",
+            description: "Logged in successfully"
+          });
+          setLocation("/");
+        } else {
+          // Handle case where login succeeded but no user data was returned
+          throw new Error("No user data received");
+        }
+      } else {
+        toast({
+          title: "Login Failed",
+          description: result.message || "Invalid username or password",
+          variant: "destructive"
+        });
+        // Reset password field on failed login
+        form.setValue("password", "");
+      }
+    } catch (error) {
+      console.error("Login error:", error);
       toast({
         title: "Error",
-        description: result.message,
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -47,7 +69,7 @@ export function LoginForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Username</FormLabel>
-              <Input {...field} />
+              <Input {...field} disabled={isLoading} />
               <FormMessage />
             </FormItem>
           )}
@@ -58,12 +80,22 @@ export function LoginForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Password</FormLabel>
-              <Input type="password" {...field} />
+              <Input 
+                type="password" 
+                {...field} 
+                disabled={isLoading}
+              />
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full">Login</Button>
+        <Button 
+          type="submit" 
+          className="w-full"
+          disabled={isLoading}
+        >
+          {isLoading ? "Logging in..." : "Login"}
+        </Button>
       </form>
     </Form>
   );
