@@ -6,6 +6,7 @@ import { REQUEST_STATUS } from "@/lib/constants";
 import { Request } from "db/schema";
 import { formatDistanceToNow, format } from "date-fns";
 import { FileText, Eye } from "lucide-react";
+import { SocialShare } from "./social-share";
 
 interface RequestViewProps {
   request: Request;
@@ -15,6 +16,11 @@ export function RequestView({ request }: RequestViewProps) {
   const getFileNameFromUrl = (url: string) => {
     return url.split('/').pop() || 'document.pdf';
   };
+
+  // Get the current URL for sharing
+  const shareUrl = typeof window !== 'undefined' ? 
+    `${window.location.origin}/requests/${request.id}` : 
+    '';
 
   return (
     <Card>
@@ -76,6 +82,14 @@ export function RequestView({ request }: RequestViewProps) {
         <div className="text-sm text-muted-foreground">
           <p>Submitted {formatDistanceToNow(new Date(request.createdAt))} ago</p>
           <p>Last updated {format(new Date(request.updatedAt), 'PPpp')}</p>
+        </div>
+
+        <div className="pt-4 border-t">
+          <SocialShare
+            title={`RTI Request: ${request.title}`}
+            description={request.description}
+            url={shareUrl}
+          />
         </div>
       </CardContent>
     </Card>

@@ -37,17 +37,20 @@ export function registerRoutes(app: Express) {
   // Serve uploaded files
   app.use('/uploads', expressStatic(join(process.cwd(), 'uploads')));
 
-  // Get all requests
+  // Get all requests - public access
   app.get("/api/requests", async (req, res) => {
     try {
-      const allRequests = await db.select().from(requests);
+      const allRequests = await db
+        .select()
+        .from(requests)
+        .orderBy(sql`${requests.createdAt} DESC`);
       res.json(allRequests);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch requests" });
     }
   });
 
-  // Create new request
+  // Create new request - requires authentication
   app.post("/api/requests", upload.single("document"), async (req, res) => {
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -117,7 +120,6 @@ export function registerRoutes(app: Express) {
     }
 
     try {
-      // Get request counts by status
       const statusCounts = await db
         .select({
           status: requests.status,
@@ -126,7 +128,6 @@ export function registerRoutes(app: Express) {
         .from(requests)
         .groupBy(requests.status);
 
-      // Get average processing time (completed requests only)
       const avgProcessingTime = await db
         .select({
           avgTime: sql<number>`
@@ -135,7 +136,6 @@ export function registerRoutes(app: Express) {
         .from(requests)
         .where(eq(requests.status, 'completed'));
 
-      // Get requests over time (last 7 days)
       const requestsOverTime = await db
         .select({
           date: sql<string>`date_trunc('day', created_at)::date`,
@@ -146,7 +146,6 @@ export function registerRoutes(app: Express) {
         .groupBy(sql`date_trunc('day', created_at)`)
         .orderBy(sql`date_trunc('day', created_at)`);
 
-      // Get institution statistics
       const institutionStats = await db
         .select({
           institutionId: requests.institutionId,

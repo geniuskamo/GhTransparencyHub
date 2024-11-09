@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { GHANA_COLORS } from "@/lib/constants";
+import { RequestView } from "@/components/rti/request-view";
 
 export function Requests() {
   const { user } = useUser();
@@ -58,7 +59,11 @@ export function Requests() {
       </div>
 
       {filteredRequests && filteredRequests.length > 0 ? (
-        <RequestList requests={filteredRequests} />
+        <div className="space-y-6">
+          {filteredRequests.map(request => (
+            <RequestView key={request.id} request={request} />
+          ))}
+        </div>
       ) : (
         <p className="text-muted-foreground">No requests found</p>
       )}
