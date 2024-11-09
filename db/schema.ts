@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -19,7 +19,9 @@ export const institutions = pgTable("institutions", {
 
 export const notifications = pgTable("notifications", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: integer("user_id").references(() => users.id),
+  userId: integer("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
   title: text("title").notNull(),
   message: text("message").notNull(),
   type: text("type", { 
@@ -27,8 +29,14 @@ export const notifications = pgTable("notifications", {
   }).notNull(),
   read: text("read").default("false").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  requestId: integer("request_id").references(() => requests.id)
-});
+  requestId: integer("request_id")
+    .references(() => requests.id, { onDelete: "cascade" })
+}, (table) => ({
+  userIdIdx: index("notifications_user_id_idx").on(table.userId),
+  requestIdIdx: index("notifications_request_id_idx").on(table.requestId),
+  createdAtIdx: index("notifications_created_at_idx").on(table.createdAt),
+  readStatusIdx: index("notifications_read_status_idx").on(table.read)
+}));
 
 export const requests = pgTable("requests", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -37,8 +45,12 @@ export const requests = pgTable("requests", {
   status: text("status", { 
     enum: ["pending", "processing", "completed", "rejected"] 
   }).default("pending").notNull(),
-  userId: integer("user_id").references(() => users.id),
-  institutionId: integer("institution_id").references(() => institutions.id),
+  userId: integer("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  institutionId: integer("institution_id")
+    .references(() => institutions.id)
+    .notNull(),
   documentUrl: text("document_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull()
@@ -53,7 +65,9 @@ export const requestAnalytics = pgTable("request_analytics", {
   completedRequests: integer("completed_requests").notNull(),
   rejectedRequests: integer("rejected_requests").notNull(),
   averageProcessingTime: integer("average_processing_time").notNull(),
-  institutionId: integer("institution_id").references(() => institutions.id)
+  institutionId: integer("institution_id")
+    .references(() => institutions.id)
+    .notNull()
 });
 
 export const insertUserSchema = createInsertSchema(users);
