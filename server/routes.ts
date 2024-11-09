@@ -1,33 +1,41 @@
-import { Express } from "express";
+import { Express, static as expressStatic } from "express";
 import { setupAuth } from "./auth";
 import { db } from "db";
 import { requests } from "db/schema";
 import { eq } from "drizzle-orm";
 import multer from "multer";
-import { extname } from "path";
+import { extname, join } from "path";
+import { ALLOWED_FILE_TYPES, MAX_FILE_SIZE } from "../client/src/lib/constants";
+
+const storage = multer.diskStorage({
+  destination: "uploads/",
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
+    cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+  }
+});
+
+const fileFilter = (req: any, file: any, cb: any) => {
+  if (ALLOWED_FILE_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only PDF files are allowed"), false);
+  }
+};
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: "uploads/",
-    filename: (req, file, cb) => {
-      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
-      cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
-    }
-  }),
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === "application/pdf") {
-      cb(null, true);
-    } else {
-      cb(new Error("Only PDF files are allowed"));
-    }
-  },
+  storage,
+  fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
+    fileSize: MAX_FILE_SIZE
   }
 });
 
 export function registerRoutes(app: Express) {
   setupAuth(app);
+
+  // Serve uploaded files
+  app.use('/uploads', expressStatic(join(process.cwd(), 'uploads')));
 
   // Get all requests
   app.get("/api/requests", async (req, res) => {
@@ -56,8 +64,33 @@ export function registerRoutes(app: Express) {
 
       res.json(newRequest);
     } catch (error) {
+      // Remove uploaded file if database insertion fails
+      if (req.file) {
+        const fs = require('fs');
+        fs.unlink(req.file.path, (err: any) => {
+          if (err) console.error('Error removing file:', err);
+        });
+      }
       res.status(500).json({ message: "Failed to create request" });
     }
+  });
+
+  // Error handling for multer
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ 
+          message: `File size must be less than ${MAX_FILE_SIZE / (1024 * 1024)}MB` 
+        });
+      }
+      return res.status(400).json({ message: err.message });
+    }
+    
+    if (err.message === "Only PDF files are allowed") {
+      return res.status(400).json({ message: err.message });
+    }
+    
+    next(err);
   });
 
   // Update request status (admin only)
