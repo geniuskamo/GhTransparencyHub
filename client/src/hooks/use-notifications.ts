@@ -1,36 +1,41 @@
 import useSWR from "swr";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useUser } from "./use-user";
 import type { Notification } from "db/schema";
 
-let socket: Socket | null = null;
-
 export function useNotifications() {
   const { user } = useUser();
+  const socketRef = useRef<Socket | null>(null);
   const { data: notifications, error, mutate } = useSWR<Notification[]>(
     user ? "/api/notifications" : null
   );
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      return;
+    }
 
-    if (!socket) {
-      socket = io({
+    if (!socketRef.current) {
+      socketRef.current = io({
         auth: {
           userId: user.id
         }
       });
 
-      socket.on("notification", (notification: Notification) => {
+      socketRef.current.on("notification", (notification: Notification) => {
         mutate((prev) => [notification, ...(prev || [])]);
       });
     }
 
     return () => {
-      if (socket) {
-        socket.disconnect();
-        socket = null;
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
     };
   }, [user, mutate]);

@@ -9,9 +9,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotifications } from "@/hooks/use-notifications";
 import { formatDistanceToNow } from "date-fns";
 import { GHANA_COLORS } from "@/lib/constants";
+import { useUser } from "@/hooks/use-user";
 
 export function NotificationsPopover() {
+  const { user } = useUser();
   const { notifications, markAsRead } = useNotifications();
+
+  if (!user) {
+    return null;
+  }
+
   const unreadCount = notifications?.filter((n) => !n.read).length ?? 0;
 
   return (
