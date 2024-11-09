@@ -17,6 +17,19 @@ export const institutions = pgTable("institutions", {
   contactInfo: jsonb("contact_info")
 });
 
+export const notifications = pgTable("notifications", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: integer("user_id").references(() => users.id),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type", { 
+    enum: ["request_update", "status_change", "document_upload", "system"] 
+  }).notNull(),
+  read: text("read").default("false").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  requestId: integer("request_id").references(() => requests.id)
+});
+
 export const requests = pgTable("requests", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   title: text("title").notNull(),
@@ -39,7 +52,7 @@ export const requestAnalytics = pgTable("request_analytics", {
   processingRequests: integer("processing_requests").notNull(),
   completedRequests: integer("completed_requests").notNull(),
   rejectedRequests: integer("rejected_requests").notNull(),
-  averageProcessingTime: integer("average_processing_time").notNull(), // in hours
+  averageProcessingTime: integer("average_processing_time").notNull(),
   institutionId: integer("institution_id").references(() => institutions.id)
 });
 
@@ -57,6 +70,11 @@ export const insertInstitutionSchema = createInsertSchema(institutions);
 export const selectInstitutionSchema = createSelectSchema(institutions);
 export type InsertInstitution = z.infer<typeof insertInstitutionSchema>;
 export type Institution = z.infer<typeof selectInstitutionSchema>;
+
+export const insertNotificationSchema = createInsertSchema(notifications);
+export const selectNotificationSchema = createSelectSchema(notifications);
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = z.infer<typeof selectNotificationSchema>;
 
 export const insertRequestAnalyticsSchema = createInsertSchema(requestAnalytics);
 export const selectRequestAnalyticsSchema = createSelectSchema(requestAnalytics);

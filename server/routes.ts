@@ -1,11 +1,12 @@
 import { Express, static as expressStatic } from "express";
 import { setupAuth } from "./auth";
 import { db } from "db";
-import { requests, requestAnalytics } from "db/schema";
+import { requests, requestAnalytics, notifications } from "db/schema";
 import { eq, sql } from "drizzle-orm";
 import multer from "multer";
 import { extname, join } from "path";
 import { ALLOWED_FILE_TYPES, MAX_FILE_SIZE } from "../client/src/lib/constants";
+import { createNotification } from "./notifications";
 
 const storage = multer.diskStorage({
   destination: "uploads/",
@@ -37,6 +38,24 @@ export function registerRoutes(app: Express) {
   // Serve uploaded files
   app.use('/uploads', expressStatic(join(process.cwd(), 'uploads')));
 
+  // Get user notifications
+  app.get("/api/notifications", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const userNotifications = await db
+        .select()
+        .from(notifications)
+        .where(eq(notifications.userId, req.user.id))
+        .orderBy(sql`${notifications.createdAt} DESC`);
+      res.json(userNotifications);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
   // Get all requests - public access
   app.get("/api/requests", async (req, res) => {
     try {
@@ -64,6 +83,15 @@ export function registerRoutes(app: Express) {
         institutionId: parseInt(req.body.institutionId),
         documentUrl: req.file ? `/uploads/${req.file.filename}` : null
       }).returning();
+
+      // Create notification for new request
+      await createNotification({
+        userId: req.user.id,
+        title: "Request Submitted",
+        message: `Your request "${newRequest.title}" has been submitted successfully.`,
+        type: "request_update",
+        requestId: newRequest.id
+      });
 
       res.json(newRequest);
     } catch (error) {
@@ -107,9 +135,36 @@ export function registerRoutes(app: Express) {
         .where(eq(requests.id, parseInt(req.params.id)))
         .returning();
 
+      // Create notification for status update
+      await createNotification({
+        userId: updatedRequest.userId,
+        title: "Request Status Updated",
+        message: `Your request "${updatedRequest.title}" status has been updated to ${req.body.status}.`,
+        type: "status_change",
+        requestId: updatedRequest.id
+      });
+
       res.json(updatedRequest);
     } catch (error) {
       res.status(500).json({ message: "Failed to update request status" });
+    }
+  });
+
+  // Mark notification as read
+  app.put("/api/notifications/:id/read", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const [updatedNotification] = await db.update(notifications)
+        .set({ read: "true" })
+        .where(eq(notifications.id, parseInt(req.params.id)))
+        .returning();
+
+      res.json(updatedNotification);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to mark notification as read" });
     }
   });
 

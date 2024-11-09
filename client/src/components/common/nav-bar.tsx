@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/navigation-menu";
 import { GHANA_COLORS } from "@/lib/constants";
 import { useMemo } from "react";
+import { NotificationsPopover } from "./notifications";
 
 export function NavBar() {
   const { user, logout } = useUser();
@@ -55,6 +56,9 @@ export function NavBar() {
                     </Button>
                   </NavigationMenuItem>
                 )}
+                <NavigationMenuItem>
+                  <NotificationsPopover />
+                </NavigationMenuItem>
                 <NavigationMenuItem>
                   <Button 
                     variant="outline"
